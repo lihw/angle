@@ -128,7 +128,7 @@ class Buffer11::BufferStorage : angle::NonCopyable
                           uint8_t **mapPointerOut) = 0;
     virtual void unmap()                           = 0;
 
-    gl::Error setData(const uint8_t *data, size_t offset, size_t size);
+    virtual gl::Error init(const uint8_t *data size_t length) = 0;
 
   protected:
     BufferStorage(Renderer11 *renderer, BufferUsage usage);
@@ -168,6 +168,8 @@ class Buffer11::NativeStorage : public Buffer11::BufferStorage
     void unmap() override;
 
     gl::ErrorOrResult<const d3d11::ShaderResourceView *> getSRVForFormat(DXGI_FORMAT srvFormat);
+    
+    gl::Error init(const uint8_t *data size_t length) override;
 
   private:
     static void FillBufferDesc(D3D11_BUFFER_DESC *bufferDesc,
@@ -212,6 +214,8 @@ class Buffer11::EmulatedIndexedStorage : public Buffer11::BufferStorage
                   uint8_t **mapPointerOut) override;
     void unmap() override;
 
+    gl::Error init(const uint8_t *data size_t length) override;
+
   private:
     d3d11::Buffer mBuffer;                     // contains expanded data for use by D3D
     angle::MemoryBuffer mMemoryBuffer;         // original data (not expanded)
@@ -246,6 +250,8 @@ class Buffer11::PackStorage : public Buffer11::BufferStorage
     gl::Error packPixels(const gl::Context *context,
                          const gl::FramebufferAttachment &readAttachment,
                          const PackPixelsParams &params);
+
+    gl::Error init(const uint8_t *data size_t length) override;
 
   private:
     gl::Error flushQueuedPackCommand();
@@ -284,6 +290,8 @@ class Buffer11::SystemMemoryStorage : public Buffer11::BufferStorage
     void unmap() override;
 
     angle::MemoryBuffer *getSystemCopy() { return &mSystemCopy; }
+    
+    gl::Error init(const uint8_t *data size_t length) override;
 
   protected:
     angle::MemoryBuffer mSystemCopy;
@@ -378,6 +386,14 @@ gl::Error Buffer11::setSubData(const gl::Context *context,
                 ANGLE_TRY_RESULT(getSystemMemoryStorage(context), writeBuffer);
             }
         }
+        else if (target == GL_ARRAY_BUFFER)
+        {
+            ANGLE_TRY_RESULT(getVertexStorage(context), writeBuffer);
+        }
+        else if (target == GL_ELEMENT_ARRAY_BUFFER)
+        {
+            ANGLE_TRY_RESULT(getIndexStorage(context), writeBuffer);
+        }
         else if (supportsDirectBinding())
         {
             ANGLE_TRY_RESULT(getStagingStorage(context), writeBuffer);
@@ -389,15 +405,23 @@ gl::Error Buffer11::setSubData(const gl::Context *context,
 
         ASSERT(writeBuffer);
 
-        // Explicitly resize the staging buffer, preserving data if the new data will not
-        // completely fill the buffer
-        if (writeBuffer->getSize() < requiredSize)
+        if (target == GL_ARRAY_BUFFER || target == GL_ELEMENT_ARRAY_BUFFER)
         {
-            bool preserveData = (offset > 0);
-            ANGLE_TRY(writeBuffer->resize(context, requiredSize, preserveData));
+            ANGLE_TRY(writeBuffer->init(static_cast<const uint8_t *>(data), size));
+        }
+        else
+        {
+            // Explicitly resize the staging buffer, preserving data if the new data will not
+            // completely fill the buffer
+            if (writeBuffer->getSize() < requiredSize)
+            {
+                bool preserveData = (offset > 0);
+                ANGLE_TRY(writeBuffer->resize(context, requiredSize, preserveData));
+            }
+
+            ANGLE_TRY(writeBuffer->setData(static_cast<const uint8_t *>(data), offset, size));
         }
 
-        ANGLE_TRY(writeBuffer->setData(static_cast<const uint8_t *>(data), offset, size));
         writeBuffer->setDataRevision(writeBuffer->getDataRevision() + 1);
 
         // Notify any vertex arrays that we have dirty data.
@@ -453,7 +477,7 @@ gl::Error Buffer11::copySubData(const gl::Context *context,
     {
         if (copySource->getUsage() == BUFFER_USAGE_STAGING)
         {
-            ANGLE_TRY_RESULT(getBufferStorage(context, BUFFER_USAGE_VERTEX_OR_TRANSFORM_FEEDBACK),
+            ANGLE_TRY_RESULT(getBufferStorage(context, BUFFER_USAGE_TRANSFORM_FEEDBACK),
                              copySource);
         }
         else
@@ -540,7 +564,7 @@ gl::Error Buffer11::unmap(const gl::Context *context, GLboolean *result)
 gl::Error Buffer11::markTransformFeedbackUsage(const gl::Context *context)
 {
     BufferStorage *transformFeedbackStorage = nullptr;
-    ANGLE_TRY_RESULT(getBufferStorage(context, BUFFER_USAGE_VERTEX_OR_TRANSFORM_FEEDBACK),
+    ANGLE_TRY_RESULT(getBufferStorage(context, BUFFER_USAGE_TRANSFORM_FEEDBACK),
                      transformFeedbackStorage);
 
     if (transformFeedbackStorage)
@@ -755,7 +779,7 @@ Buffer11::BufferStorage *Buffer11::allocateStorage(BufferUsage usage)
             return new SystemMemoryStorage(mRenderer);
         case BUFFER_USAGE_EMULATED_INDEXED_VERTEX:
             return new EmulatedIndexedStorage(mRenderer);
-        case BUFFER_USAGE_VERTEX_OR_TRANSFORM_FEEDBACK:
+        case BUFFER_USAGE_TRANSFORM_FEEDBACK:
             return new NativeStorage(mRenderer, usage, &mDirectBroadcastChannel);
         default:
             return new NativeStorage(mRenderer, usage, nullptr);
@@ -902,6 +926,20 @@ gl::ErrorOrResult<Buffer11::NativeStorage *> Buffer11::getStagingStorage(const g
     return GetAs<NativeStorage>(stagingStorage);
 }
 
+gl::ErrorOrResult<Buffer11::NativeStorage *> Buffer11::getVertexStorage(const gl::Context *context)
+{
+    BufferStorage *vertexStorage = nullptr;
+    ANGLE_TRY_RESULT(getBufferStorage(context, BUFFER_USAGE_VERTEX), vertexStorage);
+    return GetAs<NativeStorage>(vertexStorage);
+}
+
+gl::ErrorOrResult<Buffer11::NativeStorage *> Buffer11::getIndexStorage(const gl::Context *context)
+{
+    BufferStorage *indexStorage = nullptr;
+    ANGLE_TRY_RESULT(getBufferStorage(context, BUFFER_USAGE_STAGING), indexStorage);
+    return GetAs<NativeStorage>(indexStorage);
+}
+
 gl::ErrorOrResult<Buffer11::PackStorage *> Buffer11::getPackStorage(const gl::Context *context)
 {
     BufferStorage *packStorage = nullptr;
@@ -949,7 +987,7 @@ Buffer11::BufferStorage::BufferStorage(Renderer11 *renderer, BufferUsage usage)
 {
 }
 
-gl::Error Buffer11::BufferStorage::setData(const uint8_t *data, size_t offset, size_t size)
+gl::Error Buffer11::BufferStorage::init(const uint8_t *data, size_t offset, size_t size)
 {
     ASSERT(isCPUAccessible(GL_MAP_WRITE_BIT));
 
@@ -1114,16 +1152,20 @@ void Buffer11::NativeStorage::FillBufferDesc(D3D11_BUFFER_DESC *bufferDesc,
             bufferDesc->BindFlags      = 0;
             bufferDesc->CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
             break;
-
-        case BUFFER_USAGE_VERTEX_OR_TRANSFORM_FEEDBACK:
+        
+        case BUFFER_USAGE_TRANSFORM_FEEDBACK:
             bufferDesc->Usage     = D3D11_USAGE_DEFAULT;
-            bufferDesc->BindFlags = D3D11_BIND_VERTEX_BUFFER;
-
             if (renderer->isES3Capable())
             {
                 bufferDesc->BindFlags |= D3D11_BIND_STREAM_OUTPUT;
             }
 
+            bufferDesc->CPUAccessFlags = 0;
+            break;
+        
+        case BUFFER_USAGE_VERTEX:
+            bufferDesc->Usage          = D3D11_USAGE_DEFAULT;
+            bufferDesc->BindFlags      = D3D11_BIND_VERTEX_BUFFER;
             bufferDesc->CPUAccessFlags = 0;
             break;
 
@@ -1190,6 +1232,36 @@ gl::Error Buffer11::NativeStorage::map(size_t offset,
     return gl::NoError();
 }
 
+gl::Error Buffer11::NativeStorage::initData(const uint8_t *data, size_t length)
+{
+    D3D11_BUFFER_DESC bufferDesc;
+    FillBufferDesc(&bufferDesc, mRenderer, mUsage, static_cast<unsigned int>(size));
+
+    D3D11_SUBRESOURCE_DATA initialData;
+    initialData.pSysMem          = data;
+    initialData.SysMemPitch      = 0;
+    initialData.SysMemSlicePitch = 0;
+
+    d3d11::Buffer newBuffer;
+    ANGLE_TRY(mRenderer->allocateResource(bufferDesc, &initialData, &newBuffer));
+    newBuffer.setDebugName("Buffer11::NativeStorage");
+
+    // No longer need the old buffer
+    mBuffer = std::move(newBuffer);
+
+    mBufferSize = bufferDesc.ByteWidth;
+
+    // Free the SRVs.
+    clearSRVs();
+
+    // Notify that the storage has changed.
+    if (mOnStorageChanged)
+    {
+        mOnStorageChanged->signal(context);
+    }
+
+    return gl::NoError();
+}
 void Buffer11::NativeStorage::unmap()
 {
     ASSERT(isCPUAccessible(GL_MAP_WRITE_BIT) || isCPUAccessible(GL_MAP_READ_BIT));
@@ -1393,6 +1465,12 @@ void Buffer11::EmulatedIndexedStorage::unmap()
     // No-op
 }
 
+gl::Error Buffer11::EmulatedIndexedStorage::init(const uint8_t *data, size_t size)
+{
+    // No-op
+    return gl::NoError();
+}
+
 // Buffer11::PackStorage implementation
 
 Buffer11::PackStorage::PackStorage(Renderer11 *renderer)
@@ -1458,6 +1536,12 @@ gl::Error Buffer11::PackStorage::map(size_t offset,
 void Buffer11::PackStorage::unmap()
 {
     // No-op
+}
+
+gl::Error Buffer11::PackStorage::init(const uint8_t *data, size_t size)
+{
+    // No-op
+    return gl::NoError();
 }
 
 gl::Error Buffer11::PackStorage::packPixels(const gl::Context *context,
@@ -1576,5 +1660,11 @@ gl::Error Buffer11::SystemMemoryStorage::map(size_t offset,
 void Buffer11::SystemMemoryStorage::unmap()
 {
     // No-op
+}
+
+gl::Error Buffer11::SystemMemoryStorage::init(const uint8_t *data, size_t size)
+{
+    // No-op
+    return gl::NoError();
 }
 }  // namespace rx

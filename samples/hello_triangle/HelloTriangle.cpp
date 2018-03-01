@@ -47,6 +47,33 @@ class HelloTriangleSample : public SampleApplication
         }
 
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        
+        GLfloat vertices[] =
+        {
+             0.0f,  0.5f, 0.0f,
+            -0.5f, -0.5f, 0.0f,
+             0.5f, -0.5f, 0.0f,
+        };
+
+		const int TEMPBUFFERS = 128;
+		GLuint tempBuffers[TEMPBUFFERS];
+		glGenBuffers(128, tempBuffers);
+		GLfloat *tempData = new float[1024 * 1024];
+		for (int i = 0; i < TEMPBUFFERS; i++)
+		{
+			glBindBuffer(GL_ARRAY_BUFFER, tempBuffers[i]);
+			glBufferData(GL_ARRAY_BUFFER, 1024 * 1024 * sizeof(float), tempData, GL_STATIC_DRAW);
+		}
+		delete[] tempData;
+
+        glGenBuffers(1, &mBuffer);
+        glBindBuffer(GL_ARRAY_BUFFER, mBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        // Load the vertex data
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+        glEnableVertexAttribArray(0);
+
 
         return true;
     }
@@ -58,13 +85,6 @@ class HelloTriangleSample : public SampleApplication
 
     virtual void draw()
     {
-        GLfloat vertices[] =
-        {
-             0.0f,  0.5f, 0.0f,
-            -0.5f, -0.5f, 0.0f,
-             0.5f, -0.5f, 0.0f,
-        };
-
         // Set the viewport
         glViewport(0, 0, getWindow()->getWidth(), getWindow()->getHeight());
 
@@ -74,15 +94,13 @@ class HelloTriangleSample : public SampleApplication
         // Use the program object
         glUseProgram(mProgram);
 
-        // Load the vertex data
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, vertices);
-        glEnableVertexAttribArray(0);
 
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 
   private:
     GLuint mProgram;
+    GLuint mBuffer;
 };
 
 int main(int argc, char **argv)

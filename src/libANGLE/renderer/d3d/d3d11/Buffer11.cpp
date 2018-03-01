@@ -128,7 +128,9 @@ class Buffer11::BufferStorage : angle::NonCopyable
                           uint8_t **mapPointerOut) = 0;
 	virtual void unmap() = 0;
 
-    virtual gl::Error init(const uint8_t *data, size_t length) = 0;
+	gl::Error setData(const uint8_t *data, size_t offset, size_t size);
+
+    virtual gl::Error init(const gl::Context *context, const uint8_t *data, size_t length) = 0;
 
   protected:
     BufferStorage(Renderer11 *renderer, BufferUsage usage);
@@ -169,7 +171,7 @@ class Buffer11::NativeStorage : public Buffer11::BufferStorage
 
     gl::ErrorOrResult<const d3d11::ShaderResourceView *> getSRVForFormat(DXGI_FORMAT srvFormat);
     
-    gl::Error init(const uint8_t *data, size_t length) override;
+    gl::Error init(const gl::Context *context, const uint8_t *data, size_t length) override;
 
   private:
     static void FillBufferDesc(D3D11_BUFFER_DESC *bufferDesc,
@@ -214,7 +216,7 @@ class Buffer11::EmulatedIndexedStorage : public Buffer11::BufferStorage
                   uint8_t **mapPointerOut) override;
     void unmap() override;
 
-    gl::Error init(const uint8_t *data, size_t length) override;
+    gl::Error init(const gl::Context *context, const uint8_t *data, size_t length) override;
 
   private:
     d3d11::Buffer mBuffer;                     // contains expanded data for use by D3D
@@ -251,7 +253,7 @@ class Buffer11::PackStorage : public Buffer11::BufferStorage
                          const gl::FramebufferAttachment &readAttachment,
                          const PackPixelsParams &params);
 
-    gl::Error init(const uint8_t *data, size_t length) override;
+    gl::Error init(const gl::Context *context, const uint8_t *data, size_t length) override;
 
   private:
     gl::Error flushQueuedPackCommand();
@@ -291,7 +293,7 @@ class Buffer11::SystemMemoryStorage : public Buffer11::BufferStorage
 
     angle::MemoryBuffer *getSystemCopy() { return &mSystemCopy; }
     
-    gl::Error init(const uint8_t *data, size_t length) override;
+    gl::Error init(const gl::Context *context, const uint8_t *data, size_t length) override;
 
   protected:
     angle::MemoryBuffer mSystemCopy;
@@ -407,7 +409,7 @@ gl::Error Buffer11::setSubData(const gl::Context *context,
 
         if (target == GL_ARRAY_BUFFER || target == GL_ELEMENT_ARRAY_BUFFER)
         {
-            ANGLE_TRY(writeBuffer->init(static_cast<const uint8_t *>(data), size));
+            ANGLE_TRY(writeBuffer->init(context, static_cast<const uint8_t *>(data), size));
         }
         else
         {
@@ -987,7 +989,7 @@ Buffer11::BufferStorage::BufferStorage(Renderer11 *renderer, BufferUsage usage)
 {
 }
 
-gl::Error Buffer11::BufferStorage::init(const uint8_t *data, size_t offset, size_t size)
+gl::Error Buffer11::BufferStorage::setData(const uint8_t *data, size_t offset, size_t size)
 {
     ASSERT(isCPUAccessible(GL_MAP_WRITE_BIT));
 
@@ -1232,10 +1234,10 @@ gl::Error Buffer11::NativeStorage::map(size_t offset,
     return gl::NoError();
 }
 
-gl::Error Buffer11::NativeStorage::initData(const uint8_t *data, size_t length)
+gl::Error Buffer11::NativeStorage::init(const gl::Context *context, const uint8_t *data, size_t length)
 {
     D3D11_BUFFER_DESC bufferDesc;
-    FillBufferDesc(&bufferDesc, mRenderer, mUsage, static_cast<unsigned int>(size));
+    FillBufferDesc(&bufferDesc, mRenderer, mUsage, static_cast<unsigned int>(length));
 
     D3D11_SUBRESOURCE_DATA initialData;
     initialData.pSysMem          = data;
@@ -1465,7 +1467,7 @@ void Buffer11::EmulatedIndexedStorage::unmap()
     // No-op
 }
 
-gl::Error Buffer11::EmulatedIndexedStorage::init(const uint8_t *data, size_t size)
+gl::Error Buffer11::EmulatedIndexedStorage::init(const gl::Context *context, const uint8_t *data, size_t size)
 {
     // No-op
     return gl::NoError();
@@ -1538,7 +1540,7 @@ void Buffer11::PackStorage::unmap()
     // No-op
 }
 
-gl::Error Buffer11::PackStorage::init(const uint8_t *data, size_t size)
+gl::Error Buffer11::PackStorage::init(const gl::Context *context, const uint8_t *data, size_t size)
 {
     // No-op
     return gl::NoError();
@@ -1662,7 +1664,7 @@ void Buffer11::SystemMemoryStorage::unmap()
     // No-op
 }
 
-gl::Error Buffer11::SystemMemoryStorage::init(const uint8_t *data, size_t size)
+gl::Error Buffer11::SystemMemoryStorage::init(const gl::Context *context, const uint8_t *data, size_t size)
 {
     // No-op
     return gl::NoError();

@@ -126,9 +126,9 @@ class Buffer11::BufferStorage : angle::NonCopyable
                           size_t length,
                           GLbitfield access,
                           uint8_t **mapPointerOut) = 0;
-    virtual void unmap()                           = 0;
+	virtual void unmap() = 0;
 
-    virtual gl::Error init(const uint8_t *data size_t length) = 0;
+    virtual gl::Error init(const uint8_t *data, size_t length) = 0;
 
   protected:
     BufferStorage(Renderer11 *renderer, BufferUsage usage);
@@ -169,7 +169,7 @@ class Buffer11::NativeStorage : public Buffer11::BufferStorage
 
     gl::ErrorOrResult<const d3d11::ShaderResourceView *> getSRVForFormat(DXGI_FORMAT srvFormat);
     
-    gl::Error init(const uint8_t *data size_t length) override;
+    gl::Error init(const uint8_t *data, size_t length) override;
 
   private:
     static void FillBufferDesc(D3D11_BUFFER_DESC *bufferDesc,
@@ -214,7 +214,7 @@ class Buffer11::EmulatedIndexedStorage : public Buffer11::BufferStorage
                   uint8_t **mapPointerOut) override;
     void unmap() override;
 
-    gl::Error init(const uint8_t *data size_t length) override;
+    gl::Error init(const uint8_t *data, size_t length) override;
 
   private:
     d3d11::Buffer mBuffer;                     // contains expanded data for use by D3D
@@ -251,7 +251,7 @@ class Buffer11::PackStorage : public Buffer11::BufferStorage
                          const gl::FramebufferAttachment &readAttachment,
                          const PackPixelsParams &params);
 
-    gl::Error init(const uint8_t *data size_t length) override;
+    gl::Error init(const uint8_t *data, size_t length) override;
 
   private:
     gl::Error flushQueuedPackCommand();
@@ -291,7 +291,7 @@ class Buffer11::SystemMemoryStorage : public Buffer11::BufferStorage
 
     angle::MemoryBuffer *getSystemCopy() { return &mSystemCopy; }
     
-    gl::Error init(const uint8_t *data size_t length) override;
+    gl::Error init(const uint8_t *data, size_t length) override;
 
   protected:
     angle::MemoryBuffer mSystemCopy;

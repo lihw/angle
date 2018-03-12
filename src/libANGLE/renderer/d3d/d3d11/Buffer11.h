@@ -33,7 +33,8 @@ enum BufferUsage
 {
     BUFFER_USAGE_SYSTEM_MEMORY,
     BUFFER_USAGE_STAGING,
-    BUFFER_USAGE_VERTEX_OR_TRANSFORM_FEEDBACK,
+    BUFFER_USAGE_TRANSFORM_FEEDBACK,
+    BUFFER_USAGE_VERTEX,
     BUFFER_USAGE_INDEX,
     // TODO: possibly share this buffer type with shader storage buffers.
     BUFFER_USAGE_INDIRECT,
@@ -128,6 +129,8 @@ class Buffer11 : public BufferD3D
     void markBufferUsage(BufferUsage usage);
     gl::Error garbageCollection(const gl::Context *context, BufferUsage currentUsage);
     gl::ErrorOrResult<NativeStorage *> getStagingStorage(const gl::Context *context);
+    gl::ErrorOrResult<NativeStorage *> getVertexStorage(const gl::Context *context);
+    gl::ErrorOrResult<NativeStorage *> getIndexStorage(const gl::Context *context);
     gl::ErrorOrResult<PackStorage *> getPackStorage(const gl::Context *context);
     gl::ErrorOrResult<SystemMemoryStorage *> getSystemMemoryStorage(const gl::Context *context);
 

@@ -180,7 +180,7 @@ gl::Error InputLayoutCache::applyVertexBuffers(
             else
             {
                 ANGLE_TRY_RESULT(
-                    bufferStorage->getBuffer(context, BUFFER_USAGE_VERTEX_OR_TRANSFORM_FEEDBACK),
+                    bufferStorage->getBuffer(context, BUFFER_USAGE_VERTEX),
                     buffer);
             }
 

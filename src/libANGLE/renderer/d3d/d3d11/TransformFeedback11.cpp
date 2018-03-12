@@ -103,7 +103,7 @@ gl::ErrorOrResult<const std::vector<ID3D11Buffer *> *> TransformFeedback11::getS
         if (binding.get() != nullptr)
         {
             Buffer11 *storage = GetImplAs<Buffer11>(binding.get());
-            ANGLE_TRY_RESULT(storage->getBuffer(context, BUFFER_USAGE_VERTEX_OR_TRANSFORM_FEEDBACK),
+            ANGLE_TRY_RESULT(storage->getBuffer(context, BUFFER_USAGE_TRANSFORM_FEEDBACK),
                              mBuffers[bindingIdx]);
         }
     }
